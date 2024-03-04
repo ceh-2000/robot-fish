@@ -10,12 +10,17 @@ import neopixel
 import board
 import pwmio
 from adafruit_motor import servo
+import adafruit_bh1750
 
 pixel = neopixel.NeoPixel(board.NEOPIXEL, 1)
 pwm = pwmio.PWMOut(board.A2, frequency=50)
-my_servo = servo.ContinuousServo(pwm, min_pulse = 500, max_pulse = 2450)
+my_servo = servo.ContinuousServo(pwm, min_pulse=500, max_pulse=2450)
 
-def flap_angle(angle: int, duration: int):
+i2c = board.STEMMA_I2C()  # For using the built-in STEMMA QT connector on a microcontroller
+sensor = adafruit_bh1750.BH1750(i2c)
+
+
+def flap_angle(angle: int = 135, duration: int = 5):
     clock = time.monotonic() + duration
     if angle == 180:
         my_servo.throttle = 1.0
@@ -52,7 +57,8 @@ def flap_angle(angle: int, duration: int):
         return True
     return False
 
-def flap_freq(frequency: int = 1, duration: int = 135):
+
+def flap_freq(frequency: int = 1, duration: int = 5):
     clock = time.monotonic() + duration
     if frequency == 1:
         my_servo.throttle = 0.75
@@ -88,6 +94,31 @@ def flap_freq(frequency: int = 1, duration: int = 135):
         time.sleep(0.2)
         return True
     return False
+
+
+def braitenberg_mode(duration: int = 5):
+    clock = time.monotonic() + int(duration)
+    while time.monotonic() < clock:
+        if sensor.lux < 100:
+            my_servo.throttle = -0.75
+            time.sleep(0.8)
+            my_servo.throttle = 0.75
+            time.sleep(0.8)
+        elif sensor.lux < 200:
+            my_servo.throttle = -0.75
+            time.sleep(0.6)
+            my_servo.throttle = 0.75
+            time.sleep(0.6)
+        else:
+            my_servo.throttle = -0.75
+            time.sleep(0.4)
+            my_servo.throttle = 0.75
+            time.sleep(0.4)
+
+            # Reset to start position
+    my_servo.throttle = 0.0
+    time.sleep(1.0)
+
 
 # URLs to fetch from
 TEXT_URL = "http://wifitest.adafruit.com/testwifi/index.html"
@@ -128,6 +159,7 @@ print("Done")
 # Data for webpage
 data = 1
 font_family = "monospace"
+
 
 def webpage():
     html = f"""
@@ -173,18 +205,26 @@ def webpage():
 pool = socketpool.SocketPool(wifi.radio)
 server = Server(pool, "/static", debug=True)
 
+
 @server.route("/")
 def base(request: Request):
     return Response(request, f"{webpage()}", content_type='text/html')
 
+
 @server.route("/change-neopixel-color/<r>/<g>/<b>")
 def change_neopixel_color_handler_url_params(
-    request: Request, r: str = "0", g: str = "0", b: str = "0"
+        request: Request, r: str = "0", g: str = "0", b: str = "0"
 ):
     """Changes the color of the built-in NeoPixel using URL params."""
     pixel.fill((int(r), int(g), int(b)))
 
     return Response(request, f"Changed NeoPixel to color ({r}, {g}, {b})")
+
+
+@server.route("/get-light")
+def get_light(request: Request):
+    return Response(request, f"{round(sensor.lux, 2)}")
+
 
 @server.route("/exp_1/<angle>/<duration>")
 def experiment_1(request: Request, angle: int = 180, duration: int = 5):
@@ -198,6 +238,7 @@ def experiment_1(request: Request, angle: int = 180, duration: int = 5):
         resp = f"Started experiment 1 with angle {angle}."
     return Response(request, resp)
 
+
 @server.route("/exp_2/<frequency>/<duration>")
 def experiment_2(request: Request, frequency: int = 1, duration: int = 5):
     frequency = int(frequency)
@@ -210,11 +251,11 @@ def experiment_2(request: Request, frequency: int = 1, duration: int = 5):
         resp = f"Started experiment 1 with frequency level {frequency}."
     return Response(request, resp)
 
-@server.route("/exp_3")
+
+@server.route("/exp_3/<duration>")
 def experiment_3(request: Request, duration: int = 5):
-
-
-    return Response(request, f"Running experiment 3")
+    braitenberg_mode(duration)
+    return Response(request, f"Running Braitenberg fish")
 
 
 server.serve_forever(str(wifi.radio.ipv4_address))
