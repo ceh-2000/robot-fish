@@ -11,14 +11,14 @@ import board
 import pwmio
 from adafruit_motor import servo
 import adafruit_bh1750
+import sys
 
 pixel = neopixel.NeoPixel(board.NEOPIXEL, 1)
 pwm = pwmio.PWMOut(board.A2, frequency=50)
-my_servo = servo.ContinuousServo(pwm, min_pulse=500, max_pulse=2450)
+my_servo = servo.ContinuousServo(pwm, min_pulse = 500, max_pulse = 2450)
 
 i2c = board.STEMMA_I2C()  # For using the built-in STEMMA QT connector on a microcontroller
 sensor = adafruit_bh1750.BH1750(i2c)
-
 
 def flap_angle(angle: int = 135, duration: int = 5):
     clock = time.monotonic() + duration
@@ -57,7 +57,6 @@ def flap_angle(angle: int = 135, duration: int = 5):
         return True
     return False
 
-
 def flap_freq(frequency: int = 1, duration: int = 5):
     clock = time.monotonic() + duration
     if frequency == 1:
@@ -95,7 +94,6 @@ def flap_freq(frequency: int = 1, duration: int = 5):
         return True
     return False
 
-
 def braitenberg_mode(duration: int = 5):
     clock = time.monotonic() + int(duration)
     while time.monotonic() < clock:
@@ -115,10 +113,9 @@ def braitenberg_mode(duration: int = 5):
             my_servo.throttle = 0.75
             time.sleep(0.4)
 
-            # Reset to start position
+    # Reset to start position
     my_servo.throttle = 0.0
     time.sleep(1.0)
-
 
 # URLs to fetch from
 TEXT_URL = "http://wifitest.adafruit.com/testwifi/index.html"
@@ -131,10 +128,13 @@ print("Available WiFi networks:")
 for network in wifi.radio.start_scanning_networks():
     print("\t%s\t\tRSSI: %d\tChannel: %d" % (str(network.ssid, "utf-8"),
                                              network.rssi, network.channel))
-wifi.radio.stop_scanning_networks()
 
 print(f"Connecting to {os.getenv('CIRCUITPY_WIFI_SSID')}")
-wifi.radio.connect(os.getenv("CIRCUITPY_WIFI_SSID"), os.getenv("CIRCUITPY_WIFI_PASSWORD"))
+try: 
+    wifi.radio.connect(os.getenv("CIRCUITPY_WIFI_SSID"), os.getenv("CIRCUITPY_WIFI_PASSWORD"))
+except:
+    wifi.radio.stop_scanning_networks()
+    sys.exit()
 print(f"Connected to {os.getenv('CIRCUITPY_WIFI_SSID')}")
 print(f"My IP address: {wifi.radio.ipv4_address}")
 
@@ -159,7 +159,6 @@ print("Done")
 # Data for webpage
 data = 1
 font_family = "monospace"
-
 
 def webpage():
     html = f"""
@@ -205,26 +204,22 @@ def webpage():
 pool = socketpool.SocketPool(wifi.radio)
 server = Server(pool, "/static", debug=True)
 
-
 @server.route("/")
 def base(request: Request):
     return Response(request, f"{webpage()}", content_type='text/html')
 
-
 @server.route("/change-neopixel-color/<r>/<g>/<b>")
 def change_neopixel_color_handler_url_params(
-        request: Request, r: str = "0", g: str = "0", b: str = "0"
+    request: Request, r: str = "0", g: str = "0", b: str = "0"
 ):
     """Changes the color of the built-in NeoPixel using URL params."""
     pixel.fill((int(r), int(g), int(b)))
 
     return Response(request, f"Changed NeoPixel to color ({r}, {g}, {b})")
 
-
 @server.route("/get-light")
 def get_light(request: Request):
     return Response(request, f"{round(sensor.lux, 2)}")
-
 
 @server.route("/exp_1/<angle>/<duration>")
 def experiment_1(request: Request, angle: int = 180, duration: int = 5):
@@ -238,7 +233,6 @@ def experiment_1(request: Request, angle: int = 180, duration: int = 5):
         resp = f"Started experiment 1 with angle {angle}."
     return Response(request, resp)
 
-
 @server.route("/exp_2/<frequency>/<duration>")
 def experiment_2(request: Request, frequency: int = 1, duration: int = 5):
     frequency = int(frequency)
@@ -250,7 +244,6 @@ def experiment_2(request: Request, frequency: int = 1, duration: int = 5):
     if success:
         resp = f"Started experiment 1 with frequency level {frequency}."
     return Response(request, resp)
-
 
 @server.route("/exp_3/<duration>")
 def experiment_3(request: Request, duration: int = 5):
